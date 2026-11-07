@@ -67,6 +67,24 @@ class CliTest(unittest.TestCase):
             run("does-not-exist.log")
         self.assertEqual(ctx.exception.code, 2)
 
+    def test_wrong_forced_type_finds_nothing_and_exits_2(self):
+        code, _, err = run("--type", "request", LOGS[0])
+        self.assertEqual(code, 2)
+        self.assertIn("no request.log entries found", err)
+
+    def test_usage_errors_exit_2_without_traceback(self):
+        cases = [
+            ("--slow-ms", "-5", LOGS[1]),
+            ("--top", "0", LOGS[1]),
+            ("-o", "no-such-dir/report.html", LOGS[1]),
+            (str(SAMPLES),),
+        ]
+        for args in cases:
+            with self.subTest(args=args), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as ctx:
+                    run(*args)
+                self.assertEqual(ctx.exception.code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

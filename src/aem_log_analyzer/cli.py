@@ -16,6 +16,16 @@ from .rules import SEVERITIES, SEVERITY_ORDER
 FORMAT_BY_SUFFIX = {".html": "html", ".htm": "html", ".json": "json"}
 
 
+def _positive_int(value: str) -> int:
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid int value: {value!r}") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"must be 1 or greater, got {number}")
+    return number
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aem-log-analyzer",
@@ -32,8 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
         "-t", "--type", choices=("auto", "error", "request"), default="auto",
         help="log type for all files (default: auto-detect per file)",
     )
-    parser.add_argument("--slow-ms", type=int, default=1000, help="slow request threshold (default: 1000)")
-    parser.add_argument("--top", type=int, default=10, help="rows per table (default: 10)")
+    parser.add_argument("--slow-ms", type=_positive_int, default=1000, help="slow request threshold (default: 1000)")
+    parser.add_argument("--top", type=_positive_int, default=10, help="rows per table (default: 10)")
     parser.add_argument(
         "--fail-on", choices=SEVERITIES,
         help="exit with status 1 if any finding has this severity or higher (useful in CI pipelines)",
@@ -50,23 +60,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     requests: Optional[RequestLogStats] = None
     sources: List[Dict[str, str]] = []
 
+    if args.output:
+        out_dir = Path(args.output).parent
+        if not out_dir.is_dir():
+            parser.error(f"output directory does not exist: {out_dir}")
+
     for name in args.files:
         path = Path(name)
+        if path.is_dir():
+            parser.error(f"{name} is a directory; pass the log files inside it (e.g. {name}/error.log*)")
         if not path.is_file():
             parser.error(f"file not found: {name}")
         kind = detect_log_type(path) if args.type == "auto" else args.type
         if kind is None:
             print(f"warning: unrecognized log format, skipping {name} (use --type)", file=sys.stderr)
             continue
+        parsed = 0
         with open_log(path) as fh:
             if kind == "error":
                 errors = errors if errors is not None else ErrorLogStats()
                 for entry in parse_error_log(fh):
                     errors.add(entry)
+                    parsed += 1
             else:
                 requests = requests if requests is not None else RequestLogStats(args.slow_ms, args.top)
                 for request in parse_request_log(fh):
                     requests.add(request)
+                    parsed += 1
+        if parsed == 0:
+            print(f"warning: no {kind}.log entries found in {name}, skipping", file=sys.stderr)
+            continue
         sources.append({"path": str(path), "type": kind})
 
     if not sources:

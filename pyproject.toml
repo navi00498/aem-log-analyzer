@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aem-log-analyzer"
-version = "0.1.0"
+version = "0.1.1"
 description = "Triage Adobe Experience Manager (AEM) error.log and request.log files: group errors, detect known issues and find slow requests."
 readme = "README.md"
 requires-python = ">=3.9"

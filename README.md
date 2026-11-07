@@ -38,8 +38,8 @@ requests with errors, and check for OOMs. This tool does that triage in seconds.
   | `downstream-timeout` | Socket timeouts and refused connections, grouped by host |
   | `noisy-logger` | One error logged 100+ times, which drowns out real problems |
 
-- **Request analysis.** Pairs each `->` request line with its `<-` response line and reports p50, p90,
-  p95 and p99 latency, the slowest URLs and paths (with IDs normalized), the 5xx rate, and requests that
+- **Request analysis.** Pairs each `->` request line with its `<-` response line and reports p50, p90 and
+  p99 latency (plus p95 in JSON), the slowest URLs and paths (with IDs normalized), the 5xx rate, and requests that
   never finished, which can point to hung threads.
 - **Three output formats:** colour-free text for terminals and tickets, JSON for automation, and a
   single self-contained **HTML** report (no JavaScript, safe to attach to a case).
@@ -49,8 +49,12 @@ requests with errors, and check for OOMs. This tool does that triage in seconds.
 
 ## Quick start
 
+Requires **Python 3.9+** and has no other dependencies. Install it into a virtualenv (or use `pipx`/`uv tool`):
+
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
 pip install git+https://github.com/navi00498/aem-log-analyzer.git
+# or: pipx install git+https://github.com/navi00498/aem-log-analyzer.git
 
 aem-log-analyzer error.log request.log                 # text report in the terminal
 aem-log-analyzer error.log* request.log -o report.html # HTML report (format inferred from extension)
@@ -61,7 +65,8 @@ To try it on the bundled synthetic logs:
 
 ```bash
 git clone https://github.com/navi00498/aem-log-analyzer.git && cd aem-log-analyzer
-python -m pip install .
+python3 -m venv .venv && source .venv/bin/activate
+pip install .
 aem-log-analyzer samples/error.log samples/request.log -o report.html && open report.html
 ```
 
@@ -79,16 +84,24 @@ FINDINGS (15)
 ------------------------------------------------------------
 [CRITICAL] JVM OutOfMemoryError (1x)
            • 1x java.lang.OutOfMemoryError: Java heap space
-           → Capture a heap dump (-XX:+HeapDumpOnOutOfMemoryError) and review the dominator tree in Eclipse MAT...
+           → Capture a heap dump (-XX:+HeapDumpOnOutOfMemoryError) and review the dominator tree in Eclipse MAT. Common causes: unbounded queries, leaked ResourceResolvers/Sessions and oversized caches.
+
+[HIGH    ] Slow requests over 1000 ms (7.36% of requests) (309x)
+           • 288x /content/mysite/us/en/search.html
+           • 21x /bin/mysite/weather
+           → Check Dispatcher/CDN cache-ability for these paths, slow queries (see Oak traversal findings) and downstream calls. Take thread dumps while requests are slow.
+
+[HIGH    ] HTTP 5xx responses (1.43% of requests) (60x)
+           • 21x /bin/mysite/weather
+           • 4x /content/mysite/us/en/blog/post-23.html
+           • 4x /content/mysite/us/en/blog/post-25.html
+           → Correlate the timestamps with error.log entries (uncaught exceptions, timeouts) to find the failing component or dependency.
 
 [HIGH    ] Uncaught exceptions while rendering requests (HTTP 500) (46x)
            • 46x com.mysite.core.models.ArticleModel.getAuthorName
-           → Unhandled exceptions in components, Sling Models or servlets return 500s...
+           → Unhandled exceptions in components, Sling Models or servlets return 500s. Fix the root cause in the stack trace and add defensive null checks in models.
 
-[HIGH    ] Oak queries traversing the repository (missing index) (40x)
-           • 31x SELECT * FROM [cq:Page] AS s WHERE ISDESCENDANTNODE(s, [/content/mysite]) AND s.[jcr:content/author] = '?'
-           • 9x SELECT * FROM [dam:Asset] WHERE [jcr:content/metadata/dc:format] = '?' ORDER BY [jcr:created] DESC
-           → Create a matching Lucene/property index or rewrite the query to use an existing one...
+... 11 more findings (replication failures, service-user mapping, aborted queries, timeouts, ...)
 ```
 
 ## Options
@@ -140,7 +153,9 @@ request.log ─► parse_request_log ─► Request (paired -> / <-) ───�
 ## Development
 
 ```bash
-python -m pip install -e . ruff
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip            # editable installs need pip >= 21.3 (macOS ships 21.2)
+pip install -e . ruff
 python -m unittest discover -s tests -v
 ruff check .
 python scripts/generate_samples.py   # regenerate the deterministic sample logs
