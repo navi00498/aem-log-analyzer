@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aem-log-analyzer"
+version = "0.1.0"
+description = "Triage Adobe Experience Manager (AEM) error.log and request.log files: group errors, detect known issues and find slow requests."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Manpreet Singh" }]
+keywords = ["aem", "adobe-experience-manager", "sling", "oak", "logs", "troubleshooting", "observability"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Logging",
+]
+dependencies = []
+
+[project.scripts]
+aem-log-analyzer = "aem_log_analyzer.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/navi00498/aem-log-analyzer"
+Issues = "https://github.com/navi00498/aem-log-analyzer/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["UP006", "UP007", "UP035", "UP045"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["E501"]
+"tests/*" = ["E501"]
